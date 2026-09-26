@@ -3,10 +3,12 @@ import { z } from 'zod';
 import { AuthService } from '../services/auth.service.js';
 import { UserRepository } from '../repositories/user.repository.js';
 
+import { validatePassword } from '../config/passwordRules.js';
+
 const registerSchema = z.object({
   username: z.string().min(3).max(30),
   email: z.string().email(),
-  password: z.string().min(8),
+  password: z.string(),
 });
 
 const loginSchema = z.object({
@@ -76,6 +78,14 @@ export async function authRoutes(fastify: FastifyInstance) {
   fastify.post('/register', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const parsed = registerSchema.parse(request.body);
+      const validation = validatePassword(parsed.password);
+      if (!validation.valid) {
+        return reply.code(400).send({
+          success: false,
+          error: validation.errors[0],
+          details: validation.errors,
+        });
+      }
       const result = await authService.register(parsed.username, parsed.email, parsed.password);
       return reply.code(201).send({
         success: true,

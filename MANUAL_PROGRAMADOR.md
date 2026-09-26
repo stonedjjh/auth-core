@@ -97,9 +97,17 @@ Para alterar el diseno o contenido de los correos:
 ### 7. Vistas de Usuario (React + @stonedjjh/react-ui)
 - **Ruta / Ubicacion:** `frontend/src/pages/`
 - **Componentes:**
-  - `LoginView`: Formulario de acceso con soporte 2FA condicional y `rememberMe`.
-  - `RegisterView`: Formulario de registro con validacion de coincidencia de contrasenas.
+  - `LoginView`: Formulario de acceso con soporte 2FA condicional y `rememberMe`. Utiliza notificaciones flotantes con `toast.error` y `toast.success`.
+  - `RegisterView`: Formulario de registro con checklist en tiempo real de politicas activas y validacion de coincidencia.
   - `TwoFactorVerifyView`: Captura de codigo TOTP de 6 digitos durante el login.
   - `ForgotPasswordView`: Solicitud segura de recuperacion de clave.
-  - `DashboardView`: Panel protegido que despliega datos del usuario, QR de activacion 2FA y telemetria de tokens en memoria.
-- **Prevencion de Layout Shift (CLS):** Todas las vistas implementan contenedores con dimensiones minimas predefinidas (`.auth-container-box` con `min-height: 520px` y `.auth-feedback-slot` con `min-height: 56px`) para asegurar estabilidad visual al renderizar alertas o errores.
+  - `DashboardView`: Panel protegido que despliega datos del usuario, QR de activacion 2FA, clave secreta y telemetria de tokens en memoria.
+- **Sistema de Notificaciones:** Se utiliza `ToastProvider` de `@stonedjjh/react-ui` eliminando espacios en blanco o slots artificiales en los formularios.
+
+### 8. Modulo de Reglas de Seguridad de Contrasena (Modular y Extensible)
+- **Ruta / Ubicacion:**
+  - Backend: `backend/src/config/passwordRules.ts`
+  - Frontend: `frontend/src/config/passwordRules.ts`
+- **Descripcion:** Archivo declarativo donde el desarrollador puede comentar, descomentar o agregar nuevas reglas de complejidad de contrasena (longitud minima, mayusculas, minusculas, numeros, caracteres especiales, o reglas corporativas personalizadas).
+- **Funciones Principales / API:**
+  - `validatePassword(password: string): { valid: boolean; errors: string[] }`: Evalua la clave contra todas las reglas activas de la lista `PASSWORD_RULES`.

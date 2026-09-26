@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { AuthLayout, Input, Button, Alert } from '@stonedjjh/react-ui';
+import { AuthLayout, Input, Button, toast } from '@stonedjjh/react-ui';
 import { useAuth } from '../context/AuthContext';
+import { PASSWORD_RULES, validatePassword } from '../config/passwordRules';
 
 interface RegisterViewProps {
   onNavigate: (view: 'login' | 'register' | 'forgot' | '2fa') => void;
@@ -13,16 +14,20 @@ export const RegisterView: React.FC<RegisterViewProps> = ({ onNavigate }) => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMessage(null);
-    setSuccessMessage(null);
 
+    // 1. Validar reglas de contraseña
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.valid) {
+      toast.error('Contrasena debil', passwordValidation.errors[0]);
+      return;
+    }
+
+    // 2. Validar coincidencia
     if (password !== confirmPassword) {
-      setErrorMessage('Las contrasenas no coinciden');
+      toast.error('Validacion', 'Las contrasenas no coinciden.');
       return;
     }
 
@@ -35,15 +40,18 @@ export const RegisterView: React.FC<RegisterViewProps> = ({ onNavigate }) => {
       });
 
       if (!res.success) {
-        setErrorMessage(res.error || 'Error al procesar el registro');
+        toast.error('Error en el registro', res.error || 'Error al procesar el registro');
         return;
       }
 
-      setSuccessMessage('Registro exitoso. Se ha enviado un correo de bienvenida. Ya puedes iniciar sesion.');
+      toast.success('Cuenta Creada', 'Registro exitoso. Se ha enviado un correo de bienvenida.');
       setUsername('');
       setEmail('');
       setPassword('');
       setConfirmPassword('');
+      setTimeout(() => {
+        onNavigate('login');
+      }, 1500);
     } finally {
       setSubmitting(false);
     }
@@ -59,20 +67,7 @@ export const RegisterView: React.FC<RegisterViewProps> = ({ onNavigate }) => {
               subtitle="Unete a la plataforma de forma rapida y segura"
             />
             <AuthLayout.Body>
-              <div className="auth-feedback-slot">
-                {errorMessage && (
-                  <Alert variant="danger" title="Error">
-                    {errorMessage}
-                  </Alert>
-                )}
-                {successMessage && (
-                  <Alert variant="success" title="Exito">
-                    {successMessage}
-                  </Alert>
-                )}
-              </div>
-
-              <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '0.5rem' }}>
                 <Input
                   label="Nombre de usuario"
                   placeholder="ej. juan_perez"
@@ -95,12 +90,28 @@ export const RegisterView: React.FC<RegisterViewProps> = ({ onNavigate }) => {
                 <Input
                   type="password"
                   label="Contrasena"
-                  placeholder="Minimo 8 caracteres"
+                  placeholder="Ingresa tu clave"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   disabled={submitting}
                 />
+
+                {/* Checklist visual en tiempo real de reglas activas de contrasena */}
+                {password.length > 0 && (
+                  <div style={{ background: '#020617', padding: '0.75rem', borderRadius: '6px', fontSize: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                    <span style={{ color: '#94a3b8', fontWeight: 600, marginBottom: '0.25rem' }}>Requisitos de la contrasena:</span>
+                    {PASSWORD_RULES.map((rule) => {
+                      const passed = rule.test(password);
+                      return (
+                        <div key={rule.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: passed ? '#4ade80' : '#f87171' }}>
+                          <span>{passed ? '[✓]' : '[ ]'}</span>
+                          <span>{rule.label}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
 
                 <Input
                   type="password"

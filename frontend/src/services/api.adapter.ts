@@ -28,9 +28,12 @@ export class ApiAdapter {
 
   async request<T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
       ...(options.headers as Record<string, string>),
     };
+
+    if (options.body) {
+      headers['Content-Type'] = 'application/json';
+    }
 
     const token = this.getAccessToken();
     if (token) {
@@ -65,7 +68,7 @@ export class ApiAdapter {
   post<T>(endpoint: string, body?: any): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, {
       method: 'POST',
-      body: body ? JSON.stringify(body) : undefined,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   }
 }

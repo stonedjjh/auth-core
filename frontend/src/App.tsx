@@ -47,10 +47,14 @@ const MainNavigator: React.FC = () => {
   );
 };
 
+import { ToastProvider } from '@stonedjjh/react-ui';
+
 export default function App() {
   return (
-    <AuthProvider>
-      <MainNavigator />
-    </AuthProvider>
+    <ToastProvider position="top-right" duration={4000}>
+      <AuthProvider>
+        <MainNavigator />
+      </AuthProvider>
+    </ToastProvider>
   );
 }

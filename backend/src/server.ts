@@ -16,7 +16,7 @@ export async function buildServer() {
 
   // CORS
   await app.register(fastifyCors, {
-    origin: ['http://localhost:5173', 'http://localhost:5174'],
+    origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5176'],
     credentials: true,
   });
 

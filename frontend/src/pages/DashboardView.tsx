@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Button, Badge, Alert, Input } from '@stonedjjh/react-ui';
+import { Card, Button, Badge, Input, toast } from '@stonedjjh/react-ui';
 import { useAuth } from '../context/AuthContext';
 
 export const DashboardView: React.FC = () => {
@@ -7,17 +7,18 @@ export const DashboardView: React.FC = () => {
   const [setup2FAData, setSetup2FAData] = useState<{ secret: string; qrCodeDataUrl: string } | null>(null);
   const [totpCode, setTotpCode] = useState('');
   const [loading2FA, setLoading2FA] = useState(false);
-  const [feedback, setFeedback] = useState<{ type: 'success' | 'danger'; message: string } | null>(null);
+
+  const is2FAActive = Boolean(user?.two_factor_enabled);
 
   const handleStart2FA = async () => {
     setLoading2FA(true);
-    setFeedback(null);
     try {
       const res = await api.post<{ secret: string; qrCodeDataUrl: string }>('/auth/2fa/setup');
       if (res.success && res.data) {
         setSetup2FAData(res.data);
+        toast.info('Configuracion 2FA', 'Escanea el codigo QR con tu aplicacion de autenticacion.');
       } else {
-        setFeedback({ type: 'danger', message: res.error || 'Error al iniciar configuracion 2FA' });
+        toast.error('Error 2FA', res.error || 'No se pudo iniciar la configuracion 2FA');
       }
     } finally {
       setLoading2FA(false);
@@ -27,19 +28,18 @@ export const DashboardView: React.FC = () => {
   const handleConfirm2FA = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading2FA(true);
-    setFeedback(null);
 
     try {
       const res = await api.post('/auth/2fa/enable', { code: totpCode });
       if (res.success) {
-        setFeedback({ type: 'success', message: '2FA activado exitosamente en tu cuenta.' });
+        toast.success('2FA Activado', 'La verificacion en dos pasos esta ahora habilitada en tu cuenta.');
         setSetup2FAData(null);
         setTotpCode('');
         if (user) {
           setUser({ ...user, two_factor_enabled: 1 });
         }
       } else {
-        setFeedback({ type: 'danger', message: res.error || 'Codigo invalido' });
+        toast.error('Codigo Invalido', res.error || 'El codigo ingresado no es correcto.');
       }
     } finally {
       setLoading2FA(false);
@@ -61,14 +61,6 @@ export const DashboardView: React.FC = () => {
           Cerrar Sesion
         </Button>
       </div>
-
-      {feedback && (
-        <div style={{ marginBottom: '1rem' }}>
-          <Alert variant={feedback.type} title={feedback.type === 'success' ? 'Operacion Exitosa' : 'Aviso'}>
-            {feedback.message}
-          </Alert>
-        </div>
-      )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
         <Card variant="bordered">
@@ -93,8 +85,8 @@ export const DashboardView: React.FC = () => {
               </div>
               <div>
                 <strong style={{ color: '#94a3b8', display: 'block', fontSize: '0.75rem' }}>DOBLE FACTOR (2FA)</strong>
-                <Badge variant={user?.two_factor_enabled ? 'primary' : 'neutral'}>
-                  {user?.two_factor_enabled ? 'Habilitado' : 'Deshabilitado'}
+                <Badge variant={is2FAActive ? 'primary' : 'neutral'}>
+                  {is2FAActive ? 'Habilitado' : 'Deshabilitado'}
                 </Badge>
               </div>
             </div>
@@ -107,7 +99,7 @@ export const DashboardView: React.FC = () => {
             subtitle="Configura Google Authenticator u otra app TOTP"
           />
           <Card.Body>
-            {!user?.two_factor_enabled && !setup2FAData && (
+            {!is2FAActive && !setup2FAData ? (
               <div>
                 <p style={{ color: '#94a3b8', marginBottom: '1rem', fontSize: '0.875rem' }}>
                   Anade una capa extra de seguridad a tu cuenta activando la verificacion en dos pasos (TOTP).
@@ -116,7 +108,7 @@ export const DashboardView: React.FC = () => {
                   Configurar 2FA ahora
                 </Button>
               </div>
-            )}
+            ) : null}
 
             {setup2FAData && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -147,11 +139,11 @@ export const DashboardView: React.FC = () => {
               </div>
             )}
 
-            {user?.two_factor_enabled && (
+            {is2FAActive ? (
               <p style={{ color: '#4ade80', fontSize: '0.875rem' }}>
                 Tu cuenta cuenta con proteccion 2FA activa. Se requerira un codigo temporal en cada inicio de sesion.
               </p>
-            )}
+            ) : null}
           </Card.Body>
         </Card>
 

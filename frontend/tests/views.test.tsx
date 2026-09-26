@@ -53,7 +53,7 @@ describe('Batería de Pruebas de Interfaz Frontend (React + @stonedjjh/react-ui)
     expect(screen.getByText('Crear Cuenta')).toBeDefined();
     expect(screen.getByPlaceholderText('ej. juan_perez')).toBeDefined();
     expect(screen.getByPlaceholderText('usuario@ejemplo.com')).toBeDefined();
-    expect(screen.getByPlaceholderText('Minimo 8 caracteres')).toBeDefined();
+    expect(screen.getByPlaceholderText('Ingresa tu clave')).toBeDefined();
     expect(screen.getByPlaceholderText('Repite la contrasena')).toBeDefined();
     expect(screen.getByRole('button', { name: /registrarse/i })).toBeDefined();
   });

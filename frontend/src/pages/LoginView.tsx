@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AuthLayout, Input, Button, Alert } from '@stonedjjh/react-ui';
+import { AuthLayout, Input, Button, toast } from '@stonedjjh/react-ui';
 import { useAuth } from '../context/AuthContext';
 
 interface LoginViewProps {
@@ -13,11 +13,9 @@ export const LoginView: React.FC<LoginViewProps> = ({ onNavigate, onRequires2FA 
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMessage(null);
     setSubmitting(true);
 
     try {
@@ -33,7 +31,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onNavigate, onRequires2FA 
       });
 
       if (!res.success) {
-        setErrorMessage(res.error || 'Credenciales invalidas');
+        toast.error('Error de autenticacion', res.error || 'Credenciales invalidas');
         return;
       }
 
@@ -44,6 +42,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onNavigate, onRequires2FA 
       }
 
       if (res.data?.user && res.data?.accessToken) {
+        toast.success('Bienvenido', 'Inicio de sesion exitoso');
         loginSuccess(res.data.user, res.data.accessToken);
       }
     } finally {
@@ -61,15 +60,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onNavigate, onRequires2FA 
               subtitle="Ingresa tus credenciales para acceder al sistema"
             />
             <AuthLayout.Body>
-              <div className="auth-feedback-slot">
-                {errorMessage && (
-                  <Alert variant="danger" title="Error de autenticacion">
-                    {errorMessage}
-                  </Alert>
-                )}
-              </div>
-
-              <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '0.5rem' }}>
                 <Input
                   label="Correo electronico o usuario"
                   placeholder="usuario@ejemplo.com"

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AuthLayout, Input, Button, Alert } from '@stonedjjh/react-ui';
+import { AuthLayout, Input, Button, toast } from '@stonedjjh/react-ui';
 import { useAuth } from '../context/AuthContext';
 
 interface ForgotPasswordViewProps {
@@ -10,20 +10,15 @@ export const ForgotPasswordView: React.FC<ForgotPasswordViewProps> = ({ onNaviga
   const { api } = useAuth();
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [infoMessage, setInfoMessage] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
-    setInfoMessage(null);
 
     try {
       const res = await api.post<{ message?: string }>('/auth/forgot-password', { email });
-      if (res.success && res.data) {
-        setInfoMessage(res.data.message || 'Si el correo existe, recibiras un enlace para restablecer tu clave.');
-      } else {
-        setInfoMessage('Si el correo existe, recibiras un enlace para restablecer tu clave.');
-      }
+      const msg = res.data?.message || 'Si el correo existe, recibiras un enlace para restablecer tu clave.';
+      toast.info('Instrucciones enviadas', msg);
     } finally {
       setSubmitting(false);
     }
@@ -39,15 +34,7 @@ export const ForgotPasswordView: React.FC<ForgotPasswordViewProps> = ({ onNaviga
               subtitle="Enviaremos un correo seguro con el enlace para restablecer tu clave"
             />
             <AuthLayout.Body>
-              <div className="auth-feedback-slot">
-                {infoMessage && (
-                  <Alert variant="info" title="Instrucciones enviadas">
-                    {infoMessage}
-                  </Alert>
-                )}
-              </div>
-
-              <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '0.5rem' }}>
                 <Input
                   type="email"
                   label="Correo electronico asociado"

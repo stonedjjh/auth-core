@@ -37,12 +37,6 @@ body {
 .auth-container-box {
   width: 100%;
   max-width: 440px;
-  min-height: 520px;
   display: flex;
   flex-direction: column;
-}
-
-.auth-feedback-slot {
-  min-height: 56px;
-  margin-bottom: 1rem;
 }

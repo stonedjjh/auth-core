@@ -2,6 +2,5 @@ packages:
   - 'backend'
   - 'frontend'
 allowBuilds:
-  bcrypt: set this to true or false
   better-sqlite3: false
   esbuild: false

@@ -77,3 +77,29 @@ Para alterar el diseno o contenido de los correos:
   - `GET /me`: Consulta de perfil del usuario autenticado (Ruta protegida por JWT).
   - `POST /2fa/setup`: Generacion de secreto TOTP y codigo QR.
   - `POST /2fa/enable`: Confirmacion y activacion de 2FA.
+
+### 5. ApiAdapter (Capa de Adaptador Cliente)
+- **Ruta / Ubicacion:** `frontend/src/services/api.adapter.ts`
+- **Dependencias:** fetch nativo encapsulado con soporte de `credentials: 'include'`
+- **Funciones Principales / API:**
+  - `get<T>(endpoint): Promise<ApiResponse<T>>`: Peticion GET tipada inyectando token de autorizacion si existe.
+  - `post<T>(endpoint, body): Promise<ApiResponse<T>>`: Peticion POST tipada con serializacion JSON y manejo unificado de errores y desconexion por 401.
+
+### 6. AuthContext & Provider
+- **Ruta / Ubicacion:** `frontend/src/context/AuthContext.tsx`
+- **Dependencias:** `ApiAdapter`, React 19 (`useState`, `useEffect`, `createContext`)
+- **Funciones Principales / API:**
+  - `useAuth()`: Hook de acceso al estado de autenticacion.
+  - `loginSuccess(user, token)`: Almacena el usuario y el token de acceso en memoria volátil de la sesion cliente.
+  - `logout()`: Ejecuta llamada POST a `/auth/logout` y limpia el estado en memoria.
+  - `checkSession()`: Efecto de montaje para renovacion transparente via Cookie httpOnly a `/auth/refresh`.
+
+### 7. Vistas de Usuario (React + @stonedjjh/react-ui)
+- **Ruta / Ubicacion:** `frontend/src/pages/`
+- **Componentes:**
+  - `LoginView`: Formulario de acceso con soporte 2FA condicional y `rememberMe`.
+  - `RegisterView`: Formulario de registro con validacion de coincidencia de contrasenas.
+  - `TwoFactorVerifyView`: Captura de codigo TOTP de 6 digitos durante el login.
+  - `ForgotPasswordView`: Solicitud segura de recuperacion de clave.
+  - `DashboardView`: Panel protegido que despliega datos del usuario, QR de activacion 2FA y telemetria de tokens en memoria.
+- **Prevencion de Layout Shift (CLS):** Todas las vistas implementan contenedores con dimensiones minimas predefinidas (`.auth-container-box` con `min-height: 520px` y `.auth-feedback-slot` con `min-height: 56px`) para asegurar estabilidad visual al renderizar alertas o errores.

@@ -1,0 +1,35 @@
+# Dependencias
+node_modules/
+.pnpm-store/
+
+# Builds
+dist/
+build/
+.output/
+
+# Entorno y Secretos (guardrails.md)
+.env
+.env.local
+*.env
+!.env.example
+
+# Base de datos local
+*.sqlite
+*.sqlite3
+*.db
+
+# Bitácoras y Temporales (Reglas de desarrollo)
+BITACORA.md
+BITACORA_HISTORICO.md
+temp_*
+temp_plan_rama.md
+temp_informe_fallas.md
+
+# Logs y SO
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+.DS_Store
+Thumbs.db

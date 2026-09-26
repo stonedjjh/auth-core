@@ -15,7 +15,7 @@ async function main() {
   });
 
   console.log('\n======================================================');
-  console.log('🚀 CLI DE CONFIGURACIÓN Y MIGRACIÓN DE AUTENTICACIÓN');
+  console.log('CLI DE CONFIGURACION Y MIGRACION DE AUTENTICACION');
   console.log('======================================================\n');
 
   // 1. Preguntar motor de base de datos
@@ -84,11 +84,11 @@ async function main() {
   ].filter(Boolean).join('\n');
 
   fs.writeFileSync(envPath, envContent, 'utf-8');
-  console.log(`\n✅ Archivo .env configurado correctamente.`);
+  console.log(`\nArchivo .env configurado correctamente.`);
 
   // Generar y ejecutar el DDL
   const sql = generateUsersTableSql({ engine, enableSoftDelete });
-  console.log('\n📜 Ejecutando script de migración SQL...');
+  console.log('\nEjecutando script de migración SQL...');
 
   process.env.DB_ENGINE = engine;
   process.env.DB_SOFT_DELETE = String(enableSoftDelete);
@@ -114,11 +114,11 @@ async function main() {
     }
     await adapter.close();
 
-    console.log('✅ Migración ejecutada con éxito. Tabla "users" lista para operar.');
+    console.log('Migración ejecutada con éxito. Tabla "users" lista para operar.');
     console.log(`   - Motor: ${engine}`);
     console.log(`   - Borrado Lógico (Soft Delete): ${enableSoftDelete ? 'Habilitado (campo deleted_at)' : 'Deshabilitado (Borrado físico)'}\n`);
   } catch (err: any) {
-    console.error('❌ Error ejecutando la migración:', err.message);
+    console.error('Error ejecutando la migración:', err.message);
   }
 }
 

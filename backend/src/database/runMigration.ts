@@ -17,7 +17,7 @@ export async function runMigration(engine: 'sqlite' | 'postgres' | 'mysql' = 'sq
     await adapter.execute(stmt);
   }
 
-  console.log(`✅ Migración completada para ${engine} (Soft Delete: ${enableSoftDelete})`);
+  console.log(`Migracion completada para ${engine} (Soft Delete: ${enableSoftDelete})`);
 }
 
 // Ejecutar si es llamado directamente

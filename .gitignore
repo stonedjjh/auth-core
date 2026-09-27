@@ -6,6 +6,7 @@ node_modules/
 dist/
 build/
 .output/
+.vite/
 
 # Entorno y Secretos (guardrails.md)
 .env

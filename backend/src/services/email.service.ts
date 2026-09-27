@@ -1,34 +1,19 @@
-import nodemailer from 'nodemailer';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { EmailProvider, NodemailerAdapter, EmailMessage } from '../adapters/email.adapter.js';
+import { BackgroundEmailQueue } from './email.queue.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export class EmailService {
-  private transporter: nodemailer.Transporter | null = null;
+  private emailProvider: EmailProvider;
+  private queue: BackgroundEmailQueue;
 
-  constructor() {
-    this.initTransporter();
-  }
-
-  private initTransporter() {
-    const host = process.env.SMTP_HOST || 'smtp.mailtrap.io';
-    const port = Number(process.env.SMTP_PORT) || 2525;
-    const user = process.env.SMTP_USER;
-    const pass = process.env.SMTP_PASS;
-
-    if (user && pass) {
-      this.transporter = nodemailer.createTransport({
-        host,
-        port,
-        auth: { user, pass },
-      });
-    } else {
-      // Modo log para desarrollo local sin credenciales SMTP
-      this.transporter = null;
-    }
+  constructor(emailProvider?: EmailProvider) {
+    this.emailProvider = emailProvider || new NodemailerAdapter();
+    this.queue = new BackgroundEmailQueue(this.emailProvider);
   }
 
   private renderTemplate(templateName: string, variables: Record<string, string>): string {
@@ -42,6 +27,9 @@ export class EmailService {
     return content;
   }
 
+  /**
+   * Envia correo de bienvenida en segundo plano
+   */
   async sendWelcomeEmail(to: string, username: string, verificationUrl: string): Promise<boolean> {
     const from = process.env.MAIL_FROM_WELCOME || 'Bienvenida <bienvenida@tudominio.com>';
     const html = this.renderTemplate('welcome', {
@@ -50,9 +38,18 @@ export class EmailService {
       verificationUrl,
     });
 
-    return this.sendMail(from, to, '¡Bienvenido a nuestra plataforma! Confirma tu cuenta', html);
+    this.queue.enqueue({
+      from,
+      to,
+      subject: '¡Bienvenido a nuestra plataforma! Confirma tu cuenta',
+      html,
+    });
+    return true;
   }
 
+  /**
+   * Envia correo de restablecimiento de contrasena en segundo plano
+   */
   async sendPasswordResetEmail(to: string, username: string, resetUrl: string, expiresIn = '15 minutos'): Promise<boolean> {
     const from = process.env.MAIL_FROM_RESET || 'Seguridad <seguridad@tudominio.com>';
     const html = this.renderTemplate('reset-password', {
@@ -61,9 +58,18 @@ export class EmailService {
       expiresIn,
     });
 
-    return this.sendMail(from, to, 'Recuperación de Contraseña', html);
+    this.queue.enqueue({
+      from,
+      to,
+      subject: 'Recuperación de Contraseña',
+      html,
+    });
+    return true;
   }
 
+  /**
+   * Envia alerta de seguridad en segundo plano
+   */
   async sendSecurityAlertEmail(to: string, username: string, eventDescription: string): Promise<boolean> {
     const from = process.env.MAIL_FROM_ALERT || 'Alertas de Cuenta <alertas@tudominio.com>';
     const html = this.renderTemplate('security-alert', {
@@ -72,27 +78,20 @@ export class EmailService {
       timestamp: new Date().toLocaleString(),
     });
 
-    return this.sendMail(from, to, 'Alerta de Seguridad en tu Cuenta', html);
+    this.queue.enqueue({
+      from,
+      to,
+      subject: 'Alerta de Seguridad en tu Cuenta',
+      html,
+    });
+    return true;
   }
 
-  private async sendMail(from: string, to: string, subject: string, html: string): Promise<boolean> {
-    if (this.transporter) {
-      try {
-        await this.transporter.sendMail({
-          from,
-          to,
-          subject,
-          html,
-        });
-        return true;
-      } catch (err) {
-        console.error('Error enviando correo SMTP:', err);
-        return false;
-      }
-    } else {
-      // Entorno de desarrollo / Simulación
-      console.log(`\n[SIMULACION EMAIL] De: ${from} | Para: ${to} | Asunto: ${subject}`);
-      return true;
-    }
+  /**
+   * Permite acceder a la cola para inspeccionar o personalizar reintentos en tests
+   */
+  getQueue(): BackgroundEmailQueue {
+    return this.queue;
   }
 }
+

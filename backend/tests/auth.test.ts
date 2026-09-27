@@ -288,4 +288,42 @@ describe('Batería de Pruebas de Autenticación y Seguridad (Fastify)', () => {
     expect(body.success).toBe(true);
     expect(body.data.message).toContain('recibirás un enlace de recuperación');
   });
+
+  /**
+   * Cola de Correos en Segundo Plano con Reintento Exponencial (Resiliencia SMTP)
+   * Qué se evalúa: Comportamiento no bloqueante y tolerancia a fallos transitorios con reintento automático.
+   * Qué se necesita: Encolar un trabajo con un proveedor de prueba que falle 2 veces y tenga éxito al 3er intento.
+   * Resultado esperado: El worker reintenta exponencialmente y finaliza con éxito en el 3er intento sin lanzar excepciones ni bloquear.
+   */
+  it('Cola de Correos: Ejecuta despacho en segundo plano con reintento exponencial ante fallos transitorios', async () => {
+    const { BackgroundEmailQueue } = await import('../src/services/email.queue.js');
+    let callCount = 0;
+    const mockProvider = {
+      isConfigured: () => true,
+      send: async () => {
+        callCount++;
+        if (callCount < 3) {
+          throw new Error('Timeout de conexion SMTP simulado');
+        }
+        return true;
+      },
+    };
+
+    const queue = new BackgroundEmailQueue(mockProvider);
+    queue.defaultBaseDelayMs = 10; // Reducir delay para velocidad de test
+    queue.enqueue(
+      {
+        from: 'test@ejemplo.com',
+        to: 'destino@ejemplo.com',
+        subject: 'Prueba de Cola',
+        html: '<p>Hola</p>',
+      },
+      3,
+      10
+    );
+
+    // Esperar a que la cola procese los reintentos
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    expect(callCount).toBe(3);
+  });
 });

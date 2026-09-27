@@ -33,17 +33,20 @@ Para alterar el diseno o contenido de los correos:
 
 ## Componentes y Modulos
 
-### 1. AuthService
+### 1. AuthService (Desacoplado via Adaptadores - Regla 6 estandar.md)
 - **Ruta / Ubicacion:** `backend/src/services/auth.service.ts`
-- **Dependencias:** `bcryptjs`, `otplib`, `qrcode`, `UserRepository`, `EmailService`
+- **Dependencias:** `HashProvider` (`HashAdapter`), `TwoFactorProvider` (`TwoFactorAdapter`), `UserRepository`, `EmailService`
+- **Arquitectura de Adaptadores (Anti-Corruption Layer):**
+  - No importa directamente `bcryptjs`, `otplib` ni `qrcode`.
+  - Recibe por inyección de dependencias `HashProvider` y `TwoFactorProvider`, lo que permite sustituir el algoritmo de hash (ej. bcrypt por Argon2) o el motor TOTP sin alterar la lógica de negocio ni romper los tests.
 - **Funciones Principales / API:**
-  - `register(username, email, password): Promise<{ user, verificationToken }>`: Registra usuario con hash seguro bcrypt y token de verificacion.
-  - `login(identifier, password): Promise<{ user?, requires2FA, tempUserId? }>`: Mitiga timing attacks ejecutando hash ficticio si el usuario no existe.
-  - `verifyLogin2FA(userId, code): Promise<UserEntity>`: Valida codigo TOTP de 6 digitos durante el inicio de sesion.
-  - `setup2FA(userId): Promise<{ secret, qrCodeDataUrl }>`: Genera secreto TOTP y codigo QR en base64 para autenticadores (Google Authenticator, etc.).
-  - `enable2FA(userId, code): Promise<void>`: Confirma y activa la proteccion 2FA tras validar un codigo inicial correcto.
+  - `register(username, email, password): Promise<{ user, verificationToken }>`: Registra usuario utilizando `hashProvider.hash()` y genera token criptográfico de verificación.
+  - `login(identifier, password): Promise<{ user?, requires2FA, tempUserId? }>`: Mitiga timing attacks comparando contra el hash del usuario o `hashProvider.getDummyHash()` si el usuario no existe.
+  - `verifyLogin2FA(userId, code): Promise<UserEntity>`: Valida código TOTP a través de `twoFactorProvider.verifyToken()`.
+  - `setup2FA(userId): Promise<{ secret, qrCodeDataUrl }>`: Genera secreto y código QR en base64 mediante `twoFactorProvider`.
+  - `enable2FA(userId, code): Promise<void>`: Confirma y activa la protección 2FA tras validar el código con `twoFactorProvider.verifyToken()`.
   - `requestPasswordReset(email): Promise<void>`: Genera token de restablecimiento y remite correo con plantilla HTML.
-  - `resetPassword(userId, token, newPassword): Promise<void>`: Actualiza contrasena e incrementa session_version para invalidar sesiones previas.
+  - `resetPassword(userId, token, newPassword): Promise<void>`: Actualiza contraseña hasheada con `hashProvider.hash()` e incrementa session_version.
 
 ### 2. UserRepository
 - **Ruta / Ubicacion:** `backend/src/repositories/user.repository.ts`
@@ -57,11 +60,33 @@ Para alterar el diseno o contenido de los correos:
   - `setTwoFactor(id, secret, enabled): Promise<void>`: Habilita o deshabilita 2FA.
   - `delete(id): Promise<void>`: Ejecuta borrado logico (UPDATE deleted_at) o borrado fisico (DELETE) segun configuracion.
 
-### 3. EmailService
-- **Ruta / Ubicacion:** `backend/src/services/email.service.ts`
-- **Dependencias:** `nodemailer`, `fs`, `path`
-- **Funciones Principales / API:**
-  - `sendEmail(options): Promise<boolean>`: Carga la plantilla HTML solicitada (`welcome.html`, `reset-password.html`, `security-alert.html`), interpola variables dinamicas e inyecta el remitente individual configurado en el archivo `.env`.
+### 3. EmailService & BackgroundEmailQueue (Despacho No Bloqueante y Resiliente)
+- **Rutas / Ubicaciones:**
+  - Servicio: `backend/src/services/email.service.ts`
+  - Cola Asíncrona: `backend/src/services/email.queue.ts`
+  - Adaptador de Transporte: `backend/src/adapters/email.adapter.ts`
+- **Dependencias:** `EmailProvider` (`NodemailerAdapter`), `BackgroundEmailQueue`, `fs`, `path`
+- **Arquitectura de Despacho en Segundo Plano:**
+  - Los métodos `sendWelcomeEmail`, `sendPasswordResetEmail` y `sendSecurityAlertEmail` no bloquean el ciclo de vida de la petición HTTP del usuario (tiempo de respuesta < 50ms).
+  - Cada solicitud encola un trabajo (`EmailJob`) en la memoria de la aplicación para ser despachado por el worker asíncrono.
+- **Política de Reintento Exponencial (Exponential Backoff):**
+  - **Intentos Máximos:** Por defecto reintenta hasta un **máximo de 3 intentos** ante errores transitorios de red o timeouts SMTP.
+  - **Cálculo del Retardo:** `delay = baseDelayMs * 2^(intento - 1)`.
+    - Intento 1: inmediato.
+    - Intento 2 (primer reintento): espera 1 segundo (`1000ms`).
+    - Intento 3 (segundo reintento): espera 2 segundos (`2000ms`).
+- **¿Dónde modificar los parámetros de reintento?**
+  - Abre el archivo `backend/src/services/email.queue.ts`.
+  - Localiza en la clase `BackgroundEmailQueue` las líneas:
+    ```typescript
+    // Parámetros de reintento configurables:
+    public defaultMaxAttempts: number = 3;       // <-- Cambiar aquí el número máximo de reintentos
+    public defaultBaseDelayMs: number = 1000;    // <-- Cambiar aquí el retardo base en milisegundos
+    ```
+  - También puedes pasar estos parámetros dinámicamente al invocar `queue.enqueue(message, maxAttempts, baseDelayMs)`.
+- **Configuración de Credenciales SMTP:**
+  - Se definen en `.env` mediante `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER` y `SMTP_PASS`.
+  - Si falta alguna credencial, el `NodemailerAdapter` conmuta de forma segura a modo simulación imprimiendo el mensaje en consola sin lanzar excepciones.
 
 ### 4. Rutas Fastify (AuthRoutes)
 - **Ruta / Ubicacion:** `backend/src/routes/auth.routes.ts`
@@ -111,3 +136,23 @@ Para alterar el diseno o contenido de los correos:
 - **Descripcion:** Archivo declarativo donde el desarrollador puede comentar, descomentar o agregar nuevas reglas de complejidad de contrasena (longitud minima, mayusculas, minusculas, numeros, caracteres especiales, o reglas corporativas personalizadas).
 - **Funciones Principales / API:**
   - `validatePassword(password: string): { valid: boolean; errors: string[] }`: Evalua la clave contra todas las reglas activas de la lista `PASSWORD_RULES`.
+
+### 9. HashAdapter (Capa Anti-Corrupcion de Hashing Criptografico)
+- **Ruta / Ubicacion:** `backend/src/adapters/hash.adapter.ts`
+- **Dependencias:** `bcryptjs`
+- **Interfaz del Adaptador (`HashProvider`):**
+  - `hash(plainText: string, saltRounds?: number): Promise<string>`: Genera el hash de la contrasena con salt configurable (por defecto 10 rondas).
+  - `compare(plainText: string, hash: string): Promise<boolean>`: Compara el texto plano con el hash provisto.
+  - `getDummyHash(): string`: Retorna un hash precalculado de 10 rondas para neutralizar Timing Attacks sin consumo variable de CPU.
+- **Objetivo Arquitectonico:** Aislar la libreria `bcryptjs`. Si en el futuro se migra a Argon2id o scrypt, solo se implementa una nueva clase que cumpla `HashProvider`.
+
+### 10. TwoFactorAdapter (Capa Anti-Corrupcion de Autenticacion TOTP)
+- **Ruta / Ubicacion:** `backend/src/adapters/twofactor.adapter.ts`
+- **Dependencias:** `otplib`, `qrcode`
+- **Interfaz del Adaptador (`TwoFactorProvider`):**
+  - `generateSecret(): string`: Genera un secreto criptografico aleatorio codificado en base32.
+  - `generateKeyUri(account: string, issuer: string, secret: string): string`: Crea el URI `otpauth://totp/...` compatible con estandares RFC 6238.
+  - `generateQrCode(keyUri: string): Promise<string>`: Produce el Data URL en formato PNG base64 para renderizar directamente en un elemento `<img>`.
+  - `verifyToken(rawToken: string, secret: string): boolean`: Sanitiza el token eliminando espacios o guiones y valida el codigo con una ventana de tolerancia horaria de +-60s (`window: [2, 2]`).
+- **Objetivo Arquitectonico:** Desacoplar las librerias `otplib` y `qrcode` de los servicios y rutas del backend.
+

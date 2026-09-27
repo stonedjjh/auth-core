@@ -2,7 +2,11 @@ import React, { useState } from 'react';
 import { Card, Button, Badge, Input, toast } from '@stonedjjh/react-ui';
 import { useAuth } from '../context/AuthContext';
 
-export const DashboardView: React.FC = () => {
+interface DashboardViewProps {
+  onLogout?: () => void;
+}
+
+export const DashboardView: React.FC<DashboardViewProps> = ({ onLogout }) => {
   const { user, accessToken, logout, api, setUser } = useAuth();
   const [setup2FAData, setSetup2FAData] = useState<{ secret: string; qrCodeDataUrl: string } | null>(null);
   const [totpCode, setTotpCode] = useState('');
@@ -57,7 +61,7 @@ export const DashboardView: React.FC = () => {
             Sesion segura activa con Fastify y JWT
           </p>
         </div>
-        <Button variant="danger" size="sm" onClick={logout}>
+        <Button variant="danger" size="sm" onClick={() => (onLogout ? onLogout() : logout())}>
           Cerrar Sesion
         </Button>
       </div>
@@ -128,11 +132,11 @@ export const DashboardView: React.FC = () => {
                     placeholder="123456"
                     maxLength={6}
                     value={totpCode}
-                    onChange={(e) => setTotpCode(e.target.value)}
+                    onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                     required
                     disabled={loading2FA}
                   />
-                  <Button type="submit" variant="primary" loading={loading2FA} disabled={totpCode.length !== 6}>
+                  <Button type="submit" variant="primary" loading={loading2FA} disabled={totpCode.replace(/\D/g, '').length !== 6}>
                     Activar
                   </Button>
                 </form>

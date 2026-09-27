@@ -1,12 +1,8 @@
-import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import { authenticator } from 'otplib';
-import QRCode from 'qrcode';
 import { UserRepository, UserEntity } from '../repositories/user.repository.js';
 import { EmailService } from './email.service.js';
-
-// Hash dummy precalculado (10 rounds de bcrypt) para mitigar Timing Attacks cuando el usuario no existe
-const DUMMY_HASH = '$2a$10$w8TKnk2V0w1e.Qj5vOQhzeXWJp2b7rU0bK6XvR7N/ZkRlmqR6g/C2';
+import { HashProvider, BcryptAdapter } from '../adapters/hash.adapter.js';
+import { TwoFactorProvider, OtplibAdapter } from '../adapters/twofactor.adapter.js';
 
 export interface TokenPayload {
   userId: string;
@@ -18,16 +14,25 @@ export interface TokenPayload {
 export class AuthService {
   private userRepo: UserRepository;
   private emailService: EmailService;
+  private hashProvider: HashProvider;
+  private twoFactorProvider: TwoFactorProvider;
 
-  constructor() {
-    this.userRepo = new UserRepository();
-    this.emailService = new EmailService();
+  constructor(
+    userRepo?: UserRepository,
+    emailService?: EmailService,
+    hashProvider?: HashProvider,
+    twoFactorProvider?: TwoFactorProvider
+  ) {
+    this.userRepo = userRepo || new UserRepository();
+    this.emailService = emailService || new EmailService();
+    this.hashProvider = hashProvider || new BcryptAdapter();
+    this.twoFactorProvider = twoFactorProvider || new OtplibAdapter();
   }
 
   /**
    * Registro de nuevo usuario
    */
-  async register(username: string, email: string, password: string):Promise<{ user: Omit<UserEntity, 'password_hash' | 'two_factor_secret'>; verificationToken: string }> {
+  async register(username: string, email: string, password: string): Promise<{ user: Omit<UserEntity, 'password_hash' | 'two_factor_secret'>; verificationToken: string }> {
     const existingEmail = await this.userRepo.findByEmail(email);
     if (existingEmail) {
       throw new Error('El correo electrónico ya se encuentra registrado.');
@@ -38,8 +43,7 @@ export class AuthService {
       throw new Error('El nombre de usuario ya se encuentra en uso.');
     }
 
-    const salt = await bcrypt.genSalt(10);
-    const passwordHash = await bcrypt.hash(password, salt);
+    const passwordHash = await this.hashProvider.hash(password);
     const userId = crypto.randomUUID();
     const verificationToken = crypto.randomBytes(32).toString('hex');
 
@@ -57,7 +61,8 @@ export class AuthService {
     });
 
     // Enviar correo de bienvenida con verificación
-    const verificationUrl = `http://localhost:5174/verify?token=${verificationToken}&email=${encodeURIComponent(email)}`;
+    const frontendBaseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const verificationUrl = `${frontendBaseUrl}/verify?token=${verificationToken}&email=${encodeURIComponent(email)}`;
     await this.emailService.sendWelcomeEmail(email, username, verificationUrl);
 
     const { password_hash, two_factor_secret, ...safeUser } = created;
@@ -66,7 +71,7 @@ export class AuthService {
 
   /**
    * Login seguro con mitigación de Timing Attacks
-   * Siempre tarda el mismo tiempo de cómputo bcrypt tanto si el usuario existe como si no.
+   * Siempre tarda el mismo tiempo de cómputo de hashing tanto si el usuario existe como si no.
    */
   async login(identifier: string, password: string): Promise<{ requires2FA?: boolean; tempUserId?: string; user?: Omit<UserEntity, 'password_hash' | 'two_factor_secret'> }> {
     const isEmail = identifier.includes('@');
@@ -74,10 +79,9 @@ export class AuthService {
       ? await this.userRepo.findByEmail(identifier)
       : await this.userRepo.findByUsername(identifier);
 
-    // Si el usuario existe, usamos su hash; si no, comparamos contra el hash dummy
-    // Esto garantiza que el tiempo de CPU sea exactamente idéntico en ambos casos (anti-timing attack)
-    const hashToCompare = user ? user.password_hash : DUMMY_HASH;
-    const isValid = await bcrypt.compare(password, hashToCompare);
+    // Si el usuario existe, usamos su hash; si no, comparamos contra el hash dummy provisto por el adapter
+    const hashToCompare = user ? user.password_hash : this.hashProvider.getDummyHash();
+    const isValid = await this.hashProvider.compare(password, hashToCompare);
 
     if (!user || !isValid) {
       throw new Error('Credenciales inválidas');
@@ -98,13 +102,13 @@ export class AuthService {
   /**
    * Verificar código TOTP (2FA) en login
    */
-  async verifyLogin2FA(userId: string, code: string): Promise<Omit<UserEntity, 'password_hash' | 'two_factor_secret'>> {
+  async verifyLogin2FA(userId: string, rawCode: string): Promise<Omit<UserEntity, 'password_hash' | 'two_factor_secret'>> {
     const user = await this.userRepo.findById(userId);
     if (!user || !user.two_factor_secret) {
       throw new Error('Usuario o configuración de 2FA no válida.');
     }
 
-    const isValid = authenticator.check(code, user.two_factor_secret);
+    const isValid = this.twoFactorProvider.verifyToken(rawCode, user.two_factor_secret);
     if (!isValid) {
       throw new Error('Código de verificación 2FA incorrecto o expirado.');
     }
@@ -120,9 +124,9 @@ export class AuthService {
     const user = await this.userRepo.findById(userId);
     if (!user) throw new Error('Usuario no encontrado.');
 
-    const secret = authenticator.generateSecret();
-    const otpauth = authenticator.keyuri(user.email, 'SistemaSeguro', secret);
-    const qrCodeDataUrl = await QRCode.toDataURL(otpauth);
+    const secret = this.twoFactorProvider.generateSecret();
+    const otpauth = this.twoFactorProvider.generateKeyUri(user.email, 'SistemaSeguro', secret);
+    const qrCodeDataUrl = await this.twoFactorProvider.generateQrCode(otpauth);
 
     // Guardar secreto provisionalmente
     await this.userRepo.setTwoFactor(userId, secret, false);
@@ -133,12 +137,12 @@ export class AuthService {
   /**
    * Confirmar y activar 2FA
    */
-  async enable2FA(userId: string, code: string): Promise<boolean> {
+  async enable2FA(userId: string, rawCode: string): Promise<boolean> {
     const user = await this.userRepo.findById(userId);
     if (!user || !user.two_factor_secret) throw new Error('No hay configuración de 2FA pendiente.');
 
-    const isValid = authenticator.check(code, user.two_factor_secret);
-    if (!isValid) throw new Error('Código inválido. Asegúrate de sincronizar la hora de tu app.');
+    const isValid = this.twoFactorProvider.verifyToken(rawCode, user.two_factor_secret);
+    if (!isValid) throw new Error('Código inválido. Asegúrate de ingresar el código actual de 6 dígitos.');
 
     await this.userRepo.setTwoFactor(userId, user.two_factor_secret, true);
     await this.emailService.sendSecurityAlertEmail(user.email, user.username, 'Se ha activado la verificación en 2 pasos (2FA) en tu cuenta.');
@@ -170,7 +174,8 @@ export class AuthService {
     const resetToken = crypto.randomBytes(32).toString('hex');
     await this.userRepo.updateRememberToken(user.id, resetToken);
 
-    const resetUrl = `http://localhost:5174/reset-password?token=${resetToken}&id=${user.id}`;
+    const frontendBaseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const resetUrl = `${frontendBaseUrl}/reset-password?token=${resetToken}&id=${user.id}`;
     await this.emailService.sendPasswordResetEmail(user.email, user.username, resetUrl);
     return true;
   }
@@ -184,8 +189,7 @@ export class AuthService {
       throw new Error('El token de restablecimiento es inválido o ha caducado.');
     }
 
-    const salt = await bcrypt.genSalt(10);
-    const passwordHash = await bcrypt.hash(newPassword, salt);
+    const passwordHash = await this.hashProvider.hash(newPassword);
 
     await this.userRepo.updatePassword(user.id, passwordHash);
     await this.userRepo.updateRememberToken(user.id, null);

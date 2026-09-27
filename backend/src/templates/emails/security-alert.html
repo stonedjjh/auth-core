@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Alerta de Seguridad</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 24px; color: #1e293b; }
+    .card { max-width: 540px; margin: 0 auto; background: #ffffff; border-radius: 12px; padding: 32px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -2px rgba(0,0,0,0.05); }
+    .header { text-align: center; margin-bottom: 24px; }
+    .title { font-size: 24px; font-weight: 700; color: #b45309; margin: 0 0 8px 0; }
+    .footer { margin-top: 32px; font-size: 13px; color: #64748b; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <h1 class="title">Alerta de Seguridad</h1>
+      <p style="color: #64748b; margin: 0;">Se ha producido una modificación en tu cuenta.</p>
+    </div>
+    <p>Hola <strong>{{username}}</strong>,</p>
+    <p>Te informamos que se ha realizado la siguiente acción en tu cuenta:</p>
+    <div style="background: #f1f5f9; padding: 16px; border-radius: 8px; margin: 16px 0; font-weight: 600;">
+      {{eventDescription}}
+    </div>
+    <p style="font-size: 14px;"><strong>Fecha y Hora:</strong> {{timestamp}}</p>
+    <p style="font-size: 14px; color: #dc2626;">Si no reconoces esta actividad, por favor comunícate de inmediato con el equipo de soporte o restablece tu contraseña.</p>
+    <div class="footer">
+      <p>Notificación automática del Sistema de Cuentas</p>
+    </div>
+  </div>
+</body>
+</html>

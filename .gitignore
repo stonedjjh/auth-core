@@ -24,6 +24,8 @@ BITACORA_HISTORICO.md
 temp_*
 temp_plan_rama.md
 temp_informe_fallas.md
+.rules/
+
 
 # Logs y SO
 logs/
